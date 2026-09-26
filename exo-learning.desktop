@@ -6,5 +6,6 @@ GenericName=Educational games
 Comment=Play MS-DOS and Windows 3.1 educational titles
 Exec=@EXEC@
 Terminal=false
-Categories=Game;Education;
+Categories=Game;
 StartupNotify=true
+StartupWMClass=com.retroexo.learningpack

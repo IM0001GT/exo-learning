@@ -82,22 +82,28 @@ chmod +t "$ROOT/eXo/eXoDOS" "$ROOT/eXo/eXoWin3x" || echo "Could not set the stic
 echo "Building the title catalog…"
 "$LAUNCHER" --pack "$ROOT" rebuild-cache
 
-python3 - "$LAUNCHER" << 'PY'
+# The app menu cannot launch a path that contains spaces or an apostrophe.
+# A launcher in ~/.local/bin keeps the desktop entry free of both.
+mkdir -p "${HOME}/.local/bin"
+cat > "${HOME}/.local/bin/exo-learning" << EOF
+#!/usr/bin/bash
+exec $(printf '%q' "$LAUNCHER") "\$@"
+EOF
+chmod +x "${HOME}/.local/bin/exo-learning"
+
+python3 - "${HOME}/.local/bin/exo-learning" "$LAUNCHER" << 'PY'
 import sys
 from pathlib import Path
 
-launcher = Path(sys.argv[1]).resolve()
-reserved = set(" \t\"'\\`$<>~|&;$*?#()")
-
-def escape(text: str) -> str:
-    return "".join(("\\" + char if char in reserved else char) for char in text)
-
+executable = Path(sys.argv[1]).resolve()
+launcher = Path(sys.argv[2]).resolve()
 template = (launcher.parent / "exo-learning.desktop").read_text(encoding="utf-8")
-desktop = template.replace("@EXEC@", escape(str(launcher)))
+desktop = template.replace("@EXEC@", str(executable))
 dest = Path.home() / ".local" / "share" / "applications" / "exo-learning.desktop"
 dest.parent.mkdir(parents=True, exist_ok=True)
 dest.write_text(desktop, encoding="utf-8")
 print(f"Desktop entry: {dest}")
+print(f"Command: {executable}")
 PY
 
 echo
