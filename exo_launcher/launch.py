@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 from exo_launcher.catalog import Title, cache_dir, read_conf_text
 from exo_launcher.library import ensure_mt32
+from exo_launcher.packages import find_emulator
 
 _HOST_PATH = re.compile(r"(?i)\b(eXo(?:DOS|Win3x))/([^/\s]+)")
 
@@ -127,7 +127,7 @@ def launch_title(
     cache: Path | None = None,
     wait: bool = False,
 ) -> subprocess.Popen[bytes]:
-    binary = shutil.which(title.emulator_bin)
+    binary = find_emulator(title.emulator_bin)
     if not binary:
         raise MissingEmulator(title.emulator_bin, title.emulator_package)
     ensure_mt32(pack)

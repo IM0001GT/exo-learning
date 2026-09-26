@@ -21,7 +21,7 @@ from exo_launcher.catalog import (
     resolve_zip,
 )
 from exo_launcher.launch import render_conf
-from exo_launcher.packages import InstallError, missing_emulators, normalize_packages
+from exo_launcher.packages import INSTALL_SCRIPT, InstallError, missing_emulators, normalize_packages
 from exo_launcher.library import (
     UnsafePath,
     UnsafeZip,
@@ -188,6 +188,12 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(normalize_packages(["dosbox-x", "dosbox", "dosbox-x"]), ["dosbox-x", "dosbox"])
         with self.assertRaises(InstallError):
             normalize_packages(["steam"])
+
+    def test_staging_is_not_installed_over_dosbox(self):
+        self.assertIn("conflicts with the dosbox package", INSTALL_SCRIPT)
+        self.assertIn("yay -S --needed --noconfirm", INSTALL_SCRIPT)
+        self.assertIn("dosbox-x", INSTALL_SCRIPT)
+        self.assertNotIn('"${aur[@]}"', INSTALL_SCRIPT)
 
 
 class ResolveTests(unittest.TestCase):

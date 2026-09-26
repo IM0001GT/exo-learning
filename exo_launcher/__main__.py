@@ -27,7 +27,7 @@ from exo_launcher.catalog import (
     save_settings,
 )
 from exo_launcher.launch import launch_title, prepare_conf
-from exo_launcher.packages import emulator_named, ensure_emulator, missing_emulators, start_install
+from exo_launcher.packages import emulator_named, ensure_emulator, find_emulator, missing_emulators, start_install
 from exo_launcher.library import (
     PartialInstall,
     cleanup_partial,
@@ -420,7 +420,7 @@ def run_gui() -> int:
 
         def _emulator_install_finished(self, packages: list[str], code: int, then) -> bool:
             self.busy = False
-            still = [package for package in packages if shutil.which(package) is None]
+            still = [package for package in packages if find_emulator(package) is None]
             self._refresh_current()
             if still:
                 self.show_error(
@@ -477,7 +477,7 @@ def run_gui() -> int:
             self._update_buttons(title, state)
 
         def _update_buttons(self, title: Title, state: str) -> None:
-            emulator_ready = shutil.which(title.emulator_bin) is not None
+            emulator_ready = find_emulator(title.emulator_bin) is not None
             if not title.available:
                 self.play_button.set_label("Not in this pack")
                 self.play_button.set_sensitive(False)
@@ -575,7 +575,7 @@ def run_gui() -> int:
             if not title.available:
                 self.show_error(f"{title.title} has no zip in this pack.")
                 return
-            if shutil.which(title.emulator_bin) is None:
+            if find_emulator(title.emulator_bin) is None:
                 info = emulator_named(title.emulator_bin)
                 self._confirm(
                     f"Install {info.label}?",
