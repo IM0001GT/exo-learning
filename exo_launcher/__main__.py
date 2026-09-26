@@ -26,7 +26,8 @@ from exo_launcher.catalog import (
     remember_pack,
     save_settings,
 )
-from exo_launcher.launch import MissingEmulator, launch_title, prepare_conf
+from exo_launcher.launch import launch_title, prepare_conf
+from exo_launcher.packages import emulator_named, ensure_emulator, missing_emulators, start_install
 from exo_launcher.library import (
     PartialInstall,
     cleanup_partial,
@@ -167,10 +168,10 @@ def command_play(catalog: Catalog, name: str, fullscreen: bool, auto_install: bo
             return _die(f"{title.title} is not installed. Install it first, or use play --install.")
         if install_one(title) != 0:
             return 1
+    if not ensure_emulator(title.emulator_bin):
+        return _die(f"{title.title} needs {title.emulator_package}, which is not installed.", 2)
     try:
         process = launch_title(pack, title, fullscreen, cache_dir(), wait=True)
-    except MissingEmulator as error:
-        return _die(str(error), 2)
     except Exception as error:
         return _die(str(error))
     if process.returncode not in (0, None):
@@ -380,6 +381,57 @@ def run_gui() -> int:
             first = self.listbox.get_row_at_index(0)
             if first is not None:
                 self.listbox.select_row(first)
+            self._offer_missing_emulators()
+            return False
+
+        def _emulator_label(self, binary: str) -> str:
+            return emulator_named(binary).label
+
+        def _offer_missing_emulators(self) -> None:
+            missing = missing_emulators()
+            if not missing:
+                return
+            names = " and ".join(item.label for item in missing)
+            detail = "\n\n".join(item.blurb for item in missing)
+            detail += "\n\nInstall opens a terminal. Enter your password when it asks."
+            self._confirm(
+                f"Install {names}?",
+                detail,
+                "Install",
+                lambda: self._run_emulator_install([item.package for item in missing]),
+            )
+
+        def _run_emulator_install(self, packages: list[str], then=None) -> None:
+            self.busy = True
+            if self.current is not None:
+                self._update_buttons(self.current, install_state(self.pack, self.current))
+            self.status.set_label("Installing. Approve it in the terminal window.")
+
+            def work() -> None:
+                try:
+                    process = start_install(packages)
+                    code = process.wait()
+                except Exception as error:
+                    GLib.idle_add(self.show_error, str(error))
+                    return
+                GLib.idle_add(self._emulator_install_finished, packages, code, then)
+
+            threading.Thread(target=work, daemon=True).start()
+
+        def _emulator_install_finished(self, packages: list[str], code: int, then) -> bool:
+            self.busy = False
+            still = [package for package in packages if shutil.which(package) is None]
+            self._refresh_current()
+            if still:
+                self.show_error(
+                    "Still not installed: "
+                    + ", ".join(still)
+                    + ". The terminal window has the reason."
+                )
+                return False
+            self.status.set_label("Installed " + ", ".join(packages) + ".")
+            if then is not None and code == 0:
+                then()
             return False
 
         def _filter_row(self, row: TitleRow) -> bool:
@@ -432,8 +484,8 @@ def run_gui() -> int:
                 self.uninstall_button.set_sensitive(False)
                 return
             if not emulator_ready:
-                self.play_button.set_label(f"Needs {title.emulator_package}")
-                self.play_button.set_sensitive(False)
+                self.play_button.set_label(f"Install {self._emulator_label(title.emulator_bin)}")
+                self.play_button.set_sensitive(not self.busy)
             elif state == "installed":
                 self.play_button.set_label("Play")
                 self.play_button.set_sensitive(not self.busy)
@@ -524,7 +576,13 @@ def run_gui() -> int:
                 self.show_error(f"{title.title} has no zip in this pack.")
                 return
             if shutil.which(title.emulator_bin) is None:
-                self.show_error(str(MissingEmulator(title.emulator_bin, title.emulator_package)))
+                info = emulator_named(title.emulator_bin)
+                self._confirm(
+                    f"Install {info.label}?",
+                    info.blurb + "\n\nA terminal will open so you can approve the install. This title starts after that.",
+                    "Install and play",
+                    lambda: self._run_emulator_install([info.package], then=lambda: self._play(title)),
+                )
                 return
             state = install_state(self.pack, title)
             if state == "partial":

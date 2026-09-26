@@ -21,6 +21,7 @@ from exo_launcher.catalog import (
     resolve_zip,
 )
 from exo_launcher.launch import render_conf
+from exo_launcher.packages import InstallError, missing_emulators, normalize_packages
 from exo_launcher.library import (
     UnsafePath,
     UnsafeZip,
@@ -175,6 +176,18 @@ class PackLocationTests(unittest.TestCase):
                 os.environ.pop("EXO_PACK", None)
             else:
                 os.environ["EXO_PACK"] = previous
+
+
+class PackageTests(unittest.TestCase):
+    def test_missing_emulators_follow_the_binaries(self):
+        present = {"dosbox"}
+        missing = missing_emulators(lambda name: name if name in present else None)
+        self.assertEqual([item.package for item in missing], ["dosbox-staging", "dosbox-x"])
+
+    def test_install_list_rejects_other_packages(self):
+        self.assertEqual(normalize_packages(["dosbox-x", "dosbox", "dosbox-x"]), ["dosbox-x", "dosbox"])
+        with self.assertRaises(InstallError):
+            normalize_packages(["steam"])
 
 
 class ResolveTests(unittest.TestCase):

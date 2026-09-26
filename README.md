@@ -45,6 +45,8 @@ Open the menu entry, or from this directory:
 ./exo-learning
 ```
 
+The first time the library opens, it asks to install any of DOSBox, DOSBox Staging, and DOSBox-X that are missing. DOSBox comes from the Arch repositories. The other two are built with yay. The same question appears if you play a title whose emulator is not installed yet. Install opens a terminal so you can enter your password.
+
 Search or filter the list, then choose **Install and play**. **Uninstall** is on the same title. From a terminal:
 
 ```bash
