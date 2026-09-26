@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+# Start the Retro Learning Pack library from this folder.
+HERE=$(cd "$(dirname "$0")" && pwd)
+export PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m exo_launcher "$@"
