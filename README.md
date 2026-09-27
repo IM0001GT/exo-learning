@@ -56,7 +56,7 @@ Search or filter the list, then choose **Install and play**. **Uninstall** is on
 ./exo-learning uninstall "The Oregon Trail"
 ```
 
-Inside a game, Ctrl+F9 closes it and Ctrl+F10 releases the mouse. The Fullscreen switch in the window applies the next time a title starts.
+Inside a game, Ctrl+F9 closes it and Ctrl+F10 releases the mouse. On Omarchy the Fullscreen switch is the same as Super+F: Hyprland scales the game window. DOSBox's own fullscreen is left off, because on a tiled desktop it becomes a small square in the corner.
 
 ## Where things go
 

@@ -20,7 +20,7 @@ from exo_launcher.catalog import (
     read_conf_text,
     resolve_zip,
 )
-from exo_launcher.launch import render_conf
+from exo_launcher.launch import launch_argv, render_conf
 from exo_launcher.packages import INSTALL_SCRIPT, InstallError, missing_emulators, normalize_packages
 from exo_launcher.library import (
     UnsafePath,
@@ -88,6 +88,17 @@ class ConfTests(unittest.TestCase):
         self.assertIn("output=overlay", rendered)
         self.assertIn("fullscreen=true", rendered)
         self.assertIn("mount c ./eXoDOS/oregont", rendered)
+
+    def test_dosbox_x_uses_the_pack_directory_without_asking(self):
+        rendered = render_conf("[dosbox]\nmemsize=64\n[sdl]\nfullscreen=false\n", "eXoWin3x", "Game", False, "x")
+        self.assertIn("working directory option=noprompt", rendered)
+        argv = launch_argv("/usr/bin/dosbox-x", Path("/tmp/game.conf"), "x", Path("/pack/eXo"))
+        self.assertIn("-nopromptfolder", argv)
+        staging = launch_argv("/usr/bin/dosbox-staging", Path("/tmp/game.conf"), "staging", Path("/pack/eXo"))
+        self.assertEqual(staging[staging.index("--working-dir") + 1], "/pack/eXo")
+        plain = launch_argv("/usr/bin/dosbox", Path("/tmp/game.conf"), "074", Path("/pack/eXo"))
+        self.assertNotIn("-nopromptfolder", plain)
+        self.assertNotIn("--working-dir", plain)
 
     def test_emulator_mapping(self):
         self.assertEqual(emulator_key(r'".\dosbox\dosbox.exe" -conf x', "dos"), "074")

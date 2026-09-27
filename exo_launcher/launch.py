@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 from exo_launcher.catalog import Title, cache_dir, read_conf_text
@@ -60,9 +65,21 @@ def render_conf(
     # DOSBox 0.74 still has output=overlay. Staging and DOSBox-X use OpenGL.
     if emulator_key in {"staging", "x"}:
         text = re.sub(r"(?im)^(output\s*=\s*)\S+", r"\g<1>opengl", text, count=1)
+    if emulator_key == "x":
+        text = _dosbox_x_no_folder_prompt(text)
     if not text.endswith("\n"):
         text += "\n"
     return text
+
+
+def _dosbox_x_no_folder_prompt(text: str) -> str:
+    """DOSBox-X asks for a working folder on every start unless this is set."""
+    option = "working directory option=noprompt"
+    if re.search(r"(?im)^working directory option\s*=", text):
+        return re.sub(r"(?im)^working directory option\s*=.*$", option, text)
+    if re.search(r"(?im)^\[dosbox\]", text):
+        return re.sub(r"(?im)^(\[dosbox\][^\n]*)", rf"\1\n{option}", text, count=1)
+    return text.rstrip() + f"\n\n[dosbox]\n{option}\n"
 
 
 _MOUNT_PATH = re.compile(
@@ -120,6 +137,75 @@ def prepare_conf(pack: Path, title: Title, fullscreen: bool, cache: Path | None 
     return path
 
 
+def launch_argv(binary: str, conf: Path, emulator_key: str, exo_dir: Path) -> list[str]:
+    argv = [binary]
+    if emulator_key == "x":
+        argv.append("-nopromptfolder")
+    if emulator_key == "staging":
+        argv.extend(["--working-dir", str(exo_dir)])
+    argv.extend(["-conf", str(conf), "-exit"])
+    return argv
+
+
+def compositor_fullscreen_available() -> bool:
+    if shutil.which("hyprctl") is None:
+        return False
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return True
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", ""))
+    return runtime.is_dir() and any(runtime.glob("hypr/*/hyprland.lock"))
+
+
+def _process_tree(pid: int) -> set[int]:
+    found = {pid}
+    growing = True
+    while growing:
+        growing = False
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            child = int(entry.name)
+            if child in found:
+                continue
+            try:
+                stat = (entry / "stat").read_text(encoding="utf-8", errors="replace")
+                parent = int(stat.rsplit(")", 1)[1].split()[1])
+            except (OSError, IndexError, ValueError):
+                continue
+            if parent in found:
+                found.add(child)
+                growing = True
+    return found
+
+
+def fullscreen_on_compositor(pid: int) -> None:
+    """Same result as Super+F: let Hyprland scale the game window."""
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        tree = _process_tree(pid)
+        try:
+            clients = json.loads(subprocess.check_output(["hyprctl", "clients", "-j"], text=True))
+        except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+            return
+        match = next((client for client in clients if client.get("pid") in tree), None)
+        if match and match.get("address"):
+            address = match["address"]
+            subprocess.run(
+                ["hyprctl", "dispatch", "focuswindow", f"address:{address}"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["hyprctl", "dispatch", "fullscreen", "fullscreen"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        time.sleep(0.1)
+
+
 def launch_title(
     pack: Path,
     title: Title,
@@ -132,19 +218,22 @@ def launch_title(
         raise MissingEmulator(title.emulator_bin, title.emulator_package)
     ensure_mt32(pack)
     cache = cache if cache is not None else cache_dir()
-    conf = prepare_conf(pack, title, fullscreen, cache)
+    use_compositor = fullscreen and compositor_fullscreen_available()
+    conf = prepare_conf(pack, title, fullscreen and not use_compositor, cache)
     log_path = cache / "last-launch.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = open(log_path, "w", encoding="utf-8")
     try:
         process = subprocess.Popen(
-            [binary, "-conf", str(conf), "-exit"],
+            launch_argv(binary, conf, title.emulator_key, pack / "eXo"),
             cwd=pack / "eXo",
             stdout=log_file,
             stderr=subprocess.STDOUT,
         )
     finally:
         log_file.close()
+    if use_compositor:
+        threading.Thread(target=fullscreen_on_compositor, args=(process.pid,), daemon=True).start()
     if wait:
         process.wait()
     return process
