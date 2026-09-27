@@ -100,13 +100,12 @@ class ConfTests(unittest.TestCase):
         self.assertNotIn("-nopromptfolder", plain)
         self.assertNotIn("--working-dir", plain)
 
-    def test_thinkin_things_keeps_sound_playing(self):
-        original = "[cpu]\ncycles=auto\n[sblaster]\nsbtype=sb16\ngoldplay=true\n"
+    def test_thinkin_things_uses_the_864_card(self):
+        original = "[dosbox]\nmachine=svga_s3\nmemsize=32\n[cpu]\ncycles=auto\n"
         adjusted = apply_title_overrides(original, "TTC1")
+        self.assertIn("machine=svga_s3vision864", adjusted)
+        self.assertNotIn("machine=svga_s3\n", adjusted)
         self.assertIn("cycles=auto", adjusted)
-        self.assertIn("dsp require interrupt acknowledge=false", adjusted)
-        self.assertIn("force dsp auto-init=true", adjusted)
-        self.assertIn("goldplay=false", adjusted)
         self.assertEqual(apply_title_overrides(original, "TTC3"), original)
 
     def test_emulator_mapping(self):

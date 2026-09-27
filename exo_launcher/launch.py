@@ -27,23 +27,13 @@ class MissingEmulator(Exception):
         )
 
 
-# Thinkin' Things 1 and 2 use the Windows SB16 driver. DOSBox-X's SB16
-# stops a wave as soon as the IRQ is not acknowledged, so speech and
-# effects end early and the driver can crash. Collection 3's player
-# acknowledges the IRQ, so it is left alone. Slowing the CPU did not help.
-_TITLE_SB = {
-    "TTC1": {
-        "dsp require interrupt acknowledge": "false",
-        "force dsp auto-init": "true",
-        "pic unmask irq": "true",
-        "goldplay": "false",
-    },
-    "TTC2": {
-        "dsp require interrupt acknowledge": "false",
-        "force dsp auto-init": "true",
-        "pic unmask irq": "true",
-        "goldplay": "false",
-    },
+# Thinkin' Things 1 and 2 ship an S3 864 Windows driver, but the pack
+# emulates an S3 Trio. The 864 driver then asks for video functions the
+# Trio does not have, the mode switch fails, and the game crashes or
+# cuts the sound off. Collection 3 does not hit that mode.
+_TITLE_MACHINE = {
+    "TTC1": {"machine": "svga_s3vision864"},
+    "TTC2": {"machine": "svga_s3vision864"},
 }
 
 
@@ -78,10 +68,10 @@ def set_conf_values(text: str, section: str, values: dict[str, str]) -> str:
 
 
 def apply_title_overrides(text: str, short_id: str) -> str:
-    sound = _TITLE_SB.get(short_id)
-    if not sound:
+    machine = _TITLE_MACHINE.get(short_id)
+    if not machine:
         return text
-    return set_conf_values(text, "sblaster", sound)
+    return set_conf_values(text, "dosbox", machine)
 
 
 def render_conf(
