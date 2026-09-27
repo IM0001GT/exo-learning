@@ -20,7 +20,7 @@ from exo_launcher.catalog import (
     read_conf_text,
     resolve_zip,
 )
-from exo_launcher.launch import launch_argv, render_conf
+from exo_launcher.launch import apply_title_overrides, launch_argv, render_conf
 from exo_launcher.packages import INSTALL_SCRIPT, InstallError, missing_emulators, normalize_packages
 from exo_launcher.library import (
     UnsafePath,
@@ -99,6 +99,15 @@ class ConfTests(unittest.TestCase):
         plain = launch_argv("/usr/bin/dosbox", Path("/tmp/game.conf"), "074", Path("/pack/eXo"))
         self.assertNotIn("-nopromptfolder", plain)
         self.assertNotIn("--working-dir", plain)
+
+    def test_thinkin_things_matches_the_stable_cpu(self):
+        original = "[cpu]\ncore=auto\ncputype=auto\ncycles=auto\n[mixer]\nrate=44100\n"
+        adjusted = apply_title_overrides(original, "TTC2")
+        self.assertIn("core=normal", adjusted)
+        self.assertIn("cputype=486_slow", adjusted)
+        self.assertIn("cycles=65000", adjusted)
+        self.assertIn("rate=44100", adjusted)
+        self.assertEqual(apply_title_overrides(original, "TTC3"), original)
 
     def test_emulator_mapping(self):
         self.assertEqual(emulator_key(r'".\dosbox\dosbox.exe" -conf x', "dos"), "074")

@@ -27,6 +27,51 @@ class MissingEmulator(Exception):
         )
 
 
+# Thinkin' Things 3 is stable. 1 crashes (illegal opcode on cputype=auto)
+# and 2 cuts speech short (cycles=auto). Match 3's CPU.
+_TITLE_CPU = {
+    "TTC1": {"core": "normal", "cputype": "486_slow", "cycles": "65000"},
+    "TTC2": {"core": "normal", "cputype": "486_slow", "cycles": "65000"},
+}
+
+
+def set_conf_values(text: str, section: str, values: dict[str, str]) -> str:
+    lines = text.splitlines(keepends=True)
+    header = re.compile(rf"(?i)^\[{re.escape(section)}\]\s*$")
+    any_header = re.compile(r"(?i)^\[[^\]]+\]\s*$")
+    start = next((index for index, raw in enumerate(lines) if header.match(raw.strip())), None)
+    if start is None:
+        added = f"\n[{section}]\n" + "".join(f"{key}={value}\n" for key, value in values.items())
+        return text.rstrip() + added + ("\n" if text.endswith("\n") else "")
+    end = next(
+        (index for index in range(start + 1, len(lines)) if any_header.match(lines[index].strip())),
+        len(lines),
+    )
+    remaining = dict(values)
+    block = [lines[start]]
+    for line in lines[start + 1 : end]:
+        matched = False
+        for key, value in list(remaining.items()):
+            if re.match(rf"(?i){re.escape(key)}\s*=", line.strip()):
+                ending = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+                block.append(f"{key}={value}{ending}")
+                del remaining[key]
+                matched = True
+                break
+        if not matched:
+            block.append(line)
+    for key, value in remaining.items():
+        block.append(f"{key}={value}\n")
+    return "".join(lines[:start] + block + lines[end:])
+
+
+def apply_title_overrides(text: str, short_id: str) -> str:
+    cpu = _TITLE_CPU.get(short_id)
+    if not cpu:
+        return text
+    return set_conf_values(text, "cpu", cpu)
+
+
 def render_conf(
     text: str,
     platform_dir: str,
@@ -122,13 +167,16 @@ def _drop_leading_directory_ups(text: str) -> str:
 
 def prepare_conf(pack: Path, title: Title, fullscreen: bool, cache: Path | None = None) -> Path:
     cache = cache if cache is not None else cache_dir()
-    rendered = render_conf(
-        read_conf_text(pack, title),
-        title.platform_dir,
-        title.install_name,
-        fullscreen,
-        title.emulator_key,
-        pack / "eXo",
+    rendered = apply_title_overrides(
+        render_conf(
+            read_conf_text(pack, title),
+            title.platform_dir,
+            title.install_name,
+            fullscreen,
+            title.emulator_key,
+            pack / "eXo",
+        ),
+        title.short_id,
     )
     directory = cache / "conf"
     directory.mkdir(parents=True, exist_ok=True)
