@@ -27,11 +27,23 @@ class MissingEmulator(Exception):
         )
 
 
-# Thinkin' Things 3 is stable. 1 crashes (illegal opcode on cputype=auto)
-# and 2 cuts speech short (cycles=auto). Match 3's CPU.
-_TITLE_CPU = {
-    "TTC1": {"core": "normal", "cputype": "486_slow", "cycles": "65000"},
-    "TTC2": {"core": "normal", "cputype": "486_slow", "cycles": "65000"},
+# Thinkin' Things 1 and 2 use the Windows SB16 driver. DOSBox-X's SB16
+# stops a wave as soon as the IRQ is not acknowledged, so speech and
+# effects end early and the driver can crash. Collection 3's player
+# acknowledges the IRQ, so it is left alone. Slowing the CPU did not help.
+_TITLE_SB = {
+    "TTC1": {
+        "dsp require interrupt acknowledge": "false",
+        "force dsp auto-init": "true",
+        "pic unmask irq": "true",
+        "goldplay": "false",
+    },
+    "TTC2": {
+        "dsp require interrupt acknowledge": "false",
+        "force dsp auto-init": "true",
+        "pic unmask irq": "true",
+        "goldplay": "false",
+    },
 }
 
 
@@ -66,10 +78,10 @@ def set_conf_values(text: str, section: str, values: dict[str, str]) -> str:
 
 
 def apply_title_overrides(text: str, short_id: str) -> str:
-    cpu = _TITLE_CPU.get(short_id)
-    if not cpu:
+    sound = _TITLE_SB.get(short_id)
+    if not sound:
         return text
-    return set_conf_values(text, "cpu", cpu)
+    return set_conf_values(text, "sblaster", sound)
 
 
 def render_conf(

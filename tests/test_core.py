@@ -100,13 +100,13 @@ class ConfTests(unittest.TestCase):
         self.assertNotIn("-nopromptfolder", plain)
         self.assertNotIn("--working-dir", plain)
 
-    def test_thinkin_things_matches_the_stable_cpu(self):
-        original = "[cpu]\ncore=auto\ncputype=auto\ncycles=auto\n[mixer]\nrate=44100\n"
-        adjusted = apply_title_overrides(original, "TTC2")
-        self.assertIn("core=normal", adjusted)
-        self.assertIn("cputype=486_slow", adjusted)
-        self.assertIn("cycles=65000", adjusted)
-        self.assertIn("rate=44100", adjusted)
+    def test_thinkin_things_keeps_sound_playing(self):
+        original = "[cpu]\ncycles=auto\n[sblaster]\nsbtype=sb16\ngoldplay=true\n"
+        adjusted = apply_title_overrides(original, "TTC1")
+        self.assertIn("cycles=auto", adjusted)
+        self.assertIn("dsp require interrupt acknowledge=false", adjusted)
+        self.assertIn("force dsp auto-init=true", adjusted)
+        self.assertIn("goldplay=false", adjusted)
         self.assertEqual(apply_title_overrides(original, "TTC3"), original)
 
     def test_emulator_mapping(self):
