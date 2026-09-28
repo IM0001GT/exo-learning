@@ -20,7 +20,7 @@ from exo_launcher.catalog import (
     read_conf_text,
     resolve_zip,
 )
-from exo_launcher.launch import apply_title_overrides, launch_argv, render_conf
+from exo_launcher.launch import align_sound_blaster_irq, apply_title_overrides, launch_argv, render_conf
 from exo_launcher.packages import INSTALL_SCRIPT, InstallError, missing_emulators, normalize_packages
 from exo_launcher.library import (
     UnsafePath,
@@ -113,9 +113,26 @@ class ConfTests(unittest.TestCase):
         self.assertIn("@win\n", adjusted)
         self.assertNotIn("runexit", adjusted)
         self.assertIn("exit\n", adjusted)
-        first = apply_title_overrides("[autoexec]\n@win TTW\n", "TTC1")
+        first = apply_title_overrides("[autoexec]\n@win TTW\n[sblaster]\nirq=7\n[gus]\ngusirq=5\n", "TTC1")
         self.assertIn("@win\n", first)
         self.assertNotIn("TTW", first)
+        self.assertIn("irq=5", first)
+        self.assertIn("gusirq=11", first)
+
+    def test_windows_sound_blaster_moves_to_irq_5(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            windows = root / "WINDOWS"
+            windows.mkdir()
+            (windows / "SYSTEM.INI").write_text("[sndblst.drv]\nInt=7\nDmaChannel=1\n", encoding="latin-1")
+            (root / "AUTOEXEC.BAT").write_text("SET BLASTER=A220 I7 D1 H5 P330 T6\n", encoding="latin-1")
+            (root / "CONFIG.SYS").write_text("DEVICE=C:\\SB16\\DRV\\CTSB16.SYS /BLASTER=A:220 I:7 D:1 H:5\n", encoding="latin-1")
+            align_sound_blaster_irq(root)
+            self.assertIn("Int=5", (windows / "SYSTEM.INI").read_text(encoding="latin-1"))
+            self.assertIn("I5", (root / "AUTOEXEC.BAT").read_text(encoding="latin-1"))
+            self.assertIn("H5", (root / "AUTOEXEC.BAT").read_text(encoding="latin-1"))
+            self.assertIn("I:5", (root / "CONFIG.SYS").read_text(encoding="latin-1"))
+            self.assertIn("H:5", (root / "CONFIG.SYS").read_text(encoding="latin-1"))
 
     def test_emulator_mapping(self):
         self.assertEqual(emulator_key(r'".\dosbox\dosbox.exe" -conf x', "dos"), "074")

@@ -36,6 +36,13 @@ _TITLE_MACHINE = {
     "TTC2": {"machine": "svga_s3vision864"},
 }
 
+# The game's own SB16 setup expects IRQ 5. DOSBox was signaling IRQ 7, so
+# the wave never finished. Moving only DOSBox to IRQ 5 plays the sound and
+# then crashes: Windows is still listening on IRQ 7, and the IRQ 5 vector
+# is empty. Both sides have to move together. GUS is off, but its IRQ is
+# also 5, so that reservation moves out of the way.
+_SB_IRQ5 = {"TTC1", "TTC2"}
+
 # Test: land in Program Manager so the Edmark shortcut can do its own
 # first-run setup. win <program> is what asks for runexit.
 _PROGRAM_MANAGER = {"TTC1", "TTC2", "TTC3"}
@@ -96,9 +103,49 @@ def apply_title_overrides(text: str, short_id: str) -> str:
     machine = _TITLE_MACHINE.get(short_id)
     if machine:
         text = set_conf_values(text, "dosbox", machine)
+    if short_id in _SB_IRQ5:
+        text = set_conf_values(text, "sblaster", {"irq": "5"})
+        text = set_conf_values(text, "gus", {"gusirq": "11"})
     if short_id in _PROGRAM_MANAGER:
         text = stop_at_program_manager(text)
     return text
+
+
+def align_sound_blaster_irq(root: Path) -> None:
+    """Make the installed Windows SB16 driver listen on IRQ 5."""
+    if not root.is_dir():
+        return
+    ini = root / "WINDOWS" / "SYSTEM.INI"
+    if ini.is_file():
+        ini.write_text(_set_sndblaster_int(ini.read_text(errors="replace")), encoding="latin-1")
+    for name in ("AUTOEXEC.BAT", "CONFIG.SYS"):
+        path = root / name
+        if not path.is_file():
+            continue
+        text = path.read_text(errors="replace")
+        updated = re.sub(r"(?i)\bI:7\b", "I:5", re.sub(r"(?i)\bI7\b", "I5", text))
+        if updated != text:
+            path.write_text(updated, encoding="latin-1")
+
+
+def _set_sndblaster_int(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    in_section = False
+    changed = False
+    rewritten: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() == "[sndblst.drv]":
+            in_section = True
+        elif stripped.startswith("[") and stripped.endswith("]"):
+            in_section = False
+        if in_section and re.match(r"(?i)int\s*=\s*7\s*$", stripped):
+            ending = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+            rewritten.append(f"Int=5{ending}")
+            changed = True
+            continue
+        rewritten.append(line)
+    return "".join(rewritten) if changed else text
 
 
 def render_conf(
@@ -294,6 +341,8 @@ def launch_title(
     if not binary:
         raise MissingEmulator(title.emulator_bin, title.emulator_package)
     ensure_mt32(pack)
+    if title.short_id in _SB_IRQ5:
+        align_sound_blaster_irq(pack / "eXo" / title.platform_dir / title.install_name)
     cache = cache if cache is not None else cache_dir()
     use_compositor = fullscreen and compositor_fullscreen_available()
     conf = prepare_conf(pack, title, fullscreen and not use_compositor, cache)
