@@ -36,6 +36,11 @@ _TITLE_MACHINE = {
     "TTC2": {"machine": "svga_s3vision864"},
 }
 
+# Test: land in Program Manager so the Edmark shortcut can do its own
+# first-run setup. win <program> is what asks for runexit.
+_PROGRAM_MANAGER = {"TTC1", "TTC2", "TTC3"}
+_WIN_WITH_ARGS = re.compile(r"(?i)^(?P<prefix>\s*@?)win\b(?P<args>\s+\S.*)$")
+
 
 def set_conf_values(text: str, section: str, values: dict[str, str]) -> str:
     lines = text.splitlines(keepends=True)
@@ -67,11 +72,33 @@ def set_conf_values(text: str, section: str, values: dict[str, str]) -> str:
     return "".join(lines[:start] + block + lines[end:])
 
 
+def stop_at_program_manager(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    in_autoexec = False
+    rewritten: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() == "[autoexec]":
+            in_autoexec = True
+        elif in_autoexec and re.match(r"(?i)^\[[^\]]+\]\s*$", stripped):
+            in_autoexec = False
+        if in_autoexec:
+            match = _WIN_WITH_ARGS.match(line.rstrip("\r\n"))
+            if match:
+                ending = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+                rewritten.append(f"{match.group('prefix')}win{ending}")
+                continue
+        rewritten.append(line)
+    return "".join(rewritten)
+
+
 def apply_title_overrides(text: str, short_id: str) -> str:
     machine = _TITLE_MACHINE.get(short_id)
-    if not machine:
-        return text
-    return set_conf_values(text, "dosbox", machine)
+    if machine:
+        text = set_conf_values(text, "dosbox", machine)
+    if short_id in _PROGRAM_MANAGER:
+        text = stop_at_program_manager(text)
+    return text
 
 
 def render_conf(

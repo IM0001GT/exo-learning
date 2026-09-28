@@ -106,7 +106,16 @@ class ConfTests(unittest.TestCase):
         self.assertIn("machine=svga_s3vision864", adjusted)
         self.assertNotIn("machine=svga_s3\n", adjusted)
         self.assertIn("cycles=auto", adjusted)
-        self.assertEqual(apply_title_overrides(original, "TTC3"), original)
+
+    def test_thinkin_things_stops_at_program_manager(self):
+        original = "[autoexec]\n@cd EDMARK\\CD\\TT\n@win runexit tt3\nexit\n"
+        adjusted = apply_title_overrides(original, "TTC3")
+        self.assertIn("@win\n", adjusted)
+        self.assertNotIn("runexit", adjusted)
+        self.assertIn("exit\n", adjusted)
+        first = apply_title_overrides("[autoexec]\n@win TTW\n", "TTC1")
+        self.assertIn("@win\n", first)
+        self.assertNotIn("TTW", first)
 
     def test_emulator_mapping(self):
         self.assertEqual(emulator_key(r'".\dosbox\dosbox.exe" -conf x', "dos"), "074")
